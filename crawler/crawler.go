@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"code/internal/assets"
 	"code/internal/fetch"
 	"code/internal/urlutil"
 )
@@ -14,16 +15,15 @@ import (
 const defaultConcurrency = 1
 
 type crawler struct {
-	fetcher      *fetch.Fetcher
-	rootURL      *url.URL
-	host         string
-	depth        uint
-	concurrency  uint
-	visited      map[string]bool
-	pages        []Page
-	indentJSON   bool
-	assetCacheMu sync.Mutex
-	assetCache   map[string]*assetCacheEntry
+	fetcher     *fetch.Fetcher
+	assetLoader *assets.Loader
+	rootURL     *url.URL
+	host        string
+	depth       uint
+	concurrency uint
+	visited     map[string]bool
+	pages       []Page
+	indentJSON  bool
 }
 
 type crawlResult struct {
@@ -45,14 +45,17 @@ func newCrawler(opts Options) (*crawler, error) {
 		return nil, err
 	}
 
+	fetcher := fetch.New(fetch.Config{
+		Client:    opts.HTTPClient,
+		Delay:     opts.Delay,
+		Retries:   opts.Retries,
+		UserAgent: opts.UserAgent,
+		Timeout:   opts.Timeout,
+	})
+
 	return &crawler{
-		fetcher: fetch.New(fetch.Config{
-			Client:    opts.HTTPClient,
-			Delay:     opts.Delay,
-			Retries:   opts.Retries,
-			UserAgent: opts.UserAgent,
-			Timeout:   opts.Timeout,
-		}),
+		fetcher:     fetcher,
+		assetLoader: assets.NewLoader(fetcher),
 		rootURL:     normURL,
 		host:        normURL.Host,
 		depth:       opts.Depth,
@@ -60,7 +63,6 @@ func newCrawler(opts Options) (*crawler, error) {
 		indentJSON:  opts.IndentJSON,
 		visited:     map[string]bool{},
 		pages:       []Page{},
-		assetCache:  map[string]*assetCacheEntry{},
 	}, nil
 }
 

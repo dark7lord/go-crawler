@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/PuerkitoBio/goquery"
-
 	"code/internal/urlutil"
 )
 
@@ -72,10 +70,4 @@ func (crw *crawler) checkLinks(
 	}
 
 	return brokenLinks, foundLinks
-}
-
-func extractLinks(doc *goquery.Document) []string {
-	return doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
-		return s.AttrOr("href", "")
-	})
 }

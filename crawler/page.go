@@ -7,13 +7,18 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
+	"code/internal/assets"
+	"code/internal/htmlparse"
+	"code/internal/seo"
 )
 
 const (
 	statusOK    = "ok"
 	statusError = "error"
 )
+
+// SEOResult holds basic SEO data of a page.
+type SEOResult = seo.Result
 
 // Page is a single crawled page in the report.
 type Page struct {
@@ -53,16 +58,20 @@ func (p *Page) setHTTPStatus(code int) {
 }
 
 func (crw *crawler) parsePage(ctx context.Context, page *Page, resp *http.Response) []foundURL {
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	doc, err := htmlparse.Parse(resp.Body)
 	if err != nil {
 		page.setError(err)
 		return nil
 	}
 
-	page.SEO = extractSEO(doc)
-	page.Assets = crw.fetchAssets(ctx, doc, resp.Request.URL)
-	links := extractLinks(doc)
 	reqURL := resp.Request.URL
+
+	page.SEO = seo.Extract(doc)
+
+	assetRefs := assets.Extract(doc, reqURL)
+	page.Assets = crw.assetLoader.Load(ctx, assetRefs)
+
+	links := htmlparse.ExtractLinks(doc)
 	brokenLinks, liveLinks := crw.checkLinks(ctx, links, reqURL, page.Depth)
 	page.BrokenLinks = brokenLinks
 	if page.Depth+1 >= crw.depth {

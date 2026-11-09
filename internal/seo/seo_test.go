@@ -1,4 +1,4 @@
-package crawler
+package seo
 
 import (
 	"io"
@@ -6,21 +6,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/require"
+
+	"code/internal/htmlparse"
 )
 
-func TestExtractSEO(t *testing.T) {
+func TestExtract(t *testing.T) {
 	tests := []struct {
 		name string
 		file string
 		html string
-		want SEOResult
+		want Result
 	}{
 		{
 			name: "good seo",
 			file: "testdata/seo/good.html",
-			want: SEOResult{
+			want: Result{
 				HasTitle:       true,
 				Title:          "Good SEO",
 				HasDescription: true,
@@ -31,12 +32,12 @@ func TestExtractSEO(t *testing.T) {
 		{
 			name: "bad seo",
 			file: "testdata/seo/bad.html",
-			want: SEOResult{},
+			want: Result{},
 		},
 		{
 			name: "empty tags",
 			file: "testdata/seo/empty-tags.html",
-			want: SEOResult{
+			want: Result{
 				HasTitle:       true,
 				HasDescription: true,
 				HasH1:          true,
@@ -45,7 +46,7 @@ func TestExtractSEO(t *testing.T) {
 		{
 			name: "spaces are trimmed",
 			file: "testdata/seo/spaced.html",
-			want: SEOResult{
+			want: Result{
 				HasTitle:       true,
 				Title:          "Spaced title",
 				HasDescription: true,
@@ -55,7 +56,7 @@ func TestExtractSEO(t *testing.T) {
 		{
 			name: "decoding html entities",
 			file: "testdata/seo/entities.html",
-			want: SEOResult{
+			want: Result{
 				HasTitle:       true,
 				Title:          "Tom & Jerry",
 				HasDescription: true,
@@ -65,12 +66,12 @@ func TestExtractSEO(t *testing.T) {
 		{
 			name: "svg title is not page title",
 			file: "testdata/seo/svg-title.html",
-			want: SEOResult{HasH1: true},
+			want: Result{HasH1: true},
 		},
 		{
 			name: "feed title outside head",
 			html: `<?xml version="1.0"?><rss><channel><title>Crawler Blog</title></channel></rss>`,
-			want: SEOResult{
+			want: Result{
 				HasTitle: true,
 				Title:    "Crawler Blog",
 			},
@@ -90,10 +91,10 @@ func TestExtractSEO(t *testing.T) {
 				reader = strings.NewReader(tt.html)
 			}
 
-			doc, err := goquery.NewDocumentFromReader(reader)
+			doc, err := htmlparse.Parse(reader)
 			require.NoError(t, err)
 
-			require.Equal(t, tt.want, extractSEO(doc))
+			require.Equal(t, tt.want, Extract(doc))
 		})
 	}
 }
