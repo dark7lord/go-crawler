@@ -4,6 +4,8 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=dark7lord_go-project-316&metric=coverage)](https://sonarcloud.io/summary/new_code?id=dark7lord_go-project-316)
 <!-- [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dark7lord_go-project-316&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dark7lord_go-project-316) -->
 
+A console parser that crawls the website, checks the validity of links and static files, collects SEO information, and generates a JSON report for each page.
+
 ## Usage
 
 ```bash
