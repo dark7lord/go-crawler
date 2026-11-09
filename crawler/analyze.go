@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"code/internal/fetch"
+	"code/internal/urlutil"
 )
 
 // DefaultDelay is the request interval used when Options.Delay is zero.
@@ -19,6 +20,9 @@ var ErrInvalidDelay = errors.New("invalid delay")
 
 // ErrInvalidTimeout is returned when Options.Timeout is negative.
 var ErrInvalidTimeout = errors.New("invalid timeout")
+
+// ErrInvalidURL is returned when the URL can't be crawled.
+var ErrInvalidURL = urlutil.ErrInvalid
 
 // Options configures a crawl run.
 type Options struct {

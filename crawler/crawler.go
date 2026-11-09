@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"code/internal/fetch"
+	"code/internal/urlutil"
 )
 
 const defaultConcurrency = 1
@@ -39,7 +40,7 @@ func newCrawler(opts Options) (*crawler, error) {
 		return nil, errors.New("http client is required")
 	}
 
-	normURL, err := normalizeURL(opts.URL)
+	normURL, err := urlutil.Normalize(opts.URL)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"code/internal/urlutil"
 )
 
 // AssetType identifies the kind of a resource referenced by a page.
@@ -218,7 +220,7 @@ func extractAssetReference(sel *goquery.Selection, pageURL *url.URL) (assetRefer
 		return assetReference{}, false
 	}
 
-	absoluteURL, ok := resolveURL(pageURL, rawURL)
+	absoluteURL, ok := urlutil.Resolve(pageURL, rawURL)
 	if !ok {
 		return assetReference{}, false
 	}

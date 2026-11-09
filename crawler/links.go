@@ -6,6 +6,8 @@ import (
 	"net/url"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"code/internal/urlutil"
 )
 
 type foundURL struct {
@@ -51,7 +53,7 @@ func (crw *crawler) checkLinks(
 	checked := map[string]bool{}
 
 	for _, href := range hrefs {
-		absURL, ok := resolveURL(pageURL, href)
+		absURL, ok := urlutil.Resolve(pageURL, href)
 		if !ok {
 			continue
 		}
