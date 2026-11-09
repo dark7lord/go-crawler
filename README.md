@@ -125,19 +125,21 @@ shared across pages during the same crawl.
 
 ## Rate limiting
 
-The first request starts immediately. With no rate limit configured, later
-requests are spaced by at least `100ms`. Two flags can configure a longer
-interval:
+The first request starts immediately. By default, later requests are spaced by
+at least `100ms`. Two flags can configure a different interval:
 
 - `--delay` sets the minimal pause between the starts of two requests
-  (example: `200ms`, `1s`);
+  (example: `200ms`, `1s`); positive values are used as-is, including values
+  below `100ms`;
 - `--rps` limits the number of requests per second; it is converted into a
-  delay of `1s / rps` (`--rps 5` is the same as `--delay 200ms`).
+  delay of `1s / rps` (`--rps 5` is the same as `--delay 200ms`, and `--rps 20`
+  gives `50ms`).
 
-If both flags are set, `--rps` wins. A value of `0` means no limit beyond the
-default `100ms` interval. The interval is global for the whole process: page
-requests, link checks, and retries share it. Interrupting the crawler (Ctrl+C)
-stops the wait immediately.
+If both flags are set, `--rps` wins. A value of `0` falls back to the default
+`100ms` interval. Negative `--delay` and `--timeout` values, and `--rps` values
+above `1_000_000_000`, are rejected with an error. The interval is global for
+the whole process: page requests, link checks, and retries share it.
+Interrupting the crawler (Ctrl+C) stops the wait immediately.
 
 ```bash
 go run ./cmd/hexlet-go-crawler --rps 5 https://example.com
@@ -156,8 +158,8 @@ expiration, and HTTP responses that may be temporary: `408 Request Timeout`,
 `429 Too Many Requests`, and status codes `500–599`. Other HTTP statuses, such
 as `404 Not Found`, are returned without retrying.
 
-Each retry observes the configured request interval; with no interval
-configured, at least `100ms` passes before the next request.
+Each retry has a separate interval: at least `100ms`, or the configured request
+interval if it is longer.
 
 ```bash
 go run ./cmd/hexlet-go-crawler --retries 2 https://example.com

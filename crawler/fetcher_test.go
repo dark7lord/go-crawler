@@ -24,13 +24,16 @@ func newTestFetcher(t *testing.T, delay time.Duration) (*fetcher, *url.URL) {
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
 
-	ftr := newFetcher(server.Client(), delay, 0, "", 0)
+	ftr := newFetcher(fetcherConfig{
+		client: server.Client(),
+		delay:  delay,
+	})
 
 	return &ftr, u
 }
 
 func TestFetcherRateLimit(t *testing.T) {
-	const delay = 50 * time.Millisecond
+	const shortDelay = 20 * time.Millisecond
 
 	tests := []struct {
 		name     string
@@ -41,20 +44,21 @@ func TestFetcherRateLimit(t *testing.T) {
 	}{
 		{
 			name:     "first request is not delayed",
-			delay:    delay,
+			delay:    50 * time.Millisecond,
 			requests: 1,
-			wantMax:  delay,
+			wantMax:  50 * time.Millisecond,
 		},
 		{
-			name:     "keeps configured interval",
-			delay:    delay,
+			name:     "spaces requests by explicit delay",
+			delay:    shortDelay,
 			requests: 5,
-			wantMin:  4 * delay,
+			wantMin:  4 * shortDelay,
+			wantMax:  200 * time.Millisecond,
 		},
 		{
-			name:     "enforces minimum interval by default",
+			name:     "spaces requests by default when delay is zero",
 			requests: 5,
-			wantMin:  4 * minRetryDelay,
+			wantMin:  4 * DefaultDelay,
 		},
 	}
 
@@ -76,6 +80,68 @@ func TestFetcherRateLimit(t *testing.T) {
 			if tt.wantMax > 0 {
 				require.Less(t, elapsed, tt.wantMax)
 			}
+		})
+	}
+}
+
+func TestNewFetcherRequestInterval(t *testing.T) {
+	tests := []struct {
+		name         string
+		delay        time.Duration
+		wantInterval time.Duration
+	}{
+		{
+			name:         "explicit delay is used as-is",
+			delay:        50 * time.Millisecond,
+			wantInterval: 50 * time.Millisecond,
+		},
+		{
+			name:         "explicit delay below default is honored",
+			delay:        20 * time.Millisecond,
+			wantInterval: 20 * time.Millisecond,
+		},
+		{
+			name:         "zero delay falls back to default",
+			wantInterval: DefaultDelay,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ftr, _ := newTestFetcher(t, tt.delay)
+
+			require.Equal(t, tt.wantInterval, ftr.requestInterval)
+		})
+	}
+}
+
+func TestNewFetcherRetryInterval(t *testing.T) {
+	tests := []struct {
+		name         string
+		delay        time.Duration
+		wantInterval time.Duration
+	}{
+		{
+			name:         "short explicit delay keeps minimum retry interval",
+			delay:        50 * time.Millisecond,
+			wantInterval: minRetryInterval,
+		},
+		{
+			name:         "zero delay uses minimum retry interval",
+			wantInterval: minRetryInterval,
+		},
+		{
+			name:         "long explicit delay raises retry interval",
+			delay:        500 * time.Millisecond,
+			wantInterval: 500 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ftr, _ := newTestFetcher(t, tt.delay)
+
+			require.Equal(t, tt.wantInterval, ftr.retryInterval)
 		})
 	}
 }

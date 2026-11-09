@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+const defaultConcurrency = 1
+
 type crawler struct {
 	fetcher      fetcher
 	rootURL      *url.URL
@@ -27,6 +29,10 @@ type crawlResult struct {
 }
 
 func newCrawler(opts Options) (*crawler, error) {
+	if err := opts.validate(); err != nil {
+		return nil, err
+	}
+
 	if opts.HTTPClient == nil {
 		return nil, errors.New("http client is required")
 	}
@@ -37,17 +43,17 @@ func newCrawler(opts Options) (*crawler, error) {
 	}
 
 	return &crawler{
-		fetcher: newFetcher(
-			opts.HTTPClient,
-			opts.Delay,
-			opts.Retries,
-			opts.UserAgent,
-			opts.Timeout,
-		),
+		fetcher: newFetcher(fetcherConfig{
+			client:    opts.HTTPClient,
+			delay:     opts.Delay,
+			retries:   opts.Retries,
+			userAgent: opts.UserAgent,
+			timeout:   opts.Timeout,
+		}),
 		rootURL:     normURL,
 		host:        normURL.Host,
 		depth:       opts.Depth,
-		concurrency: max(uint(1), opts.Concurrency),
+		concurrency: max(defaultConcurrency, opts.Concurrency),
 		indentJSON:  opts.IndentJSON,
 		visited:     map[string]bool{},
 		pages:       []Page{},

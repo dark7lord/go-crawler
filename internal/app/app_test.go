@@ -39,6 +39,9 @@ func TestRun(t *testing.T) {
 		{"too many args", []string{"a.com", "b.com"}, 1, "", "expected 1 url"},
 		{"invalid flag value", []string{"--depth", "abc", "a.com"}, 1, "", "invalid value"},
 		{"invalid url", []string{"ftp://a.com"}, 1, "", "invalid url"},
+		{"negative delay", []string{"--delay=-1s", "a.com"}, 1, "", "invalid delay"},
+		{"negative timeout", []string{"--timeout=-1s", "a.com"}, 1, "", "invalid timeout"},
+		{"too large rps", []string{"--rps=2000000000", "a.com"}, 1, "", "invalid rps"},
 	}
 
 	for _, tt := range tests {

@@ -32,6 +32,26 @@ func TestAnalyzeInvalidInput(t *testing.T) {
 			opts:      crawler.Options{URL: "ftp://x", Depth: 1, HTTPClient: server.Client()},
 			wantErrIs: crawler.ErrInvalidURL,
 		},
+		{
+			name: "negative delay",
+			opts: crawler.Options{
+				URL:        server.URL,
+				Depth:      1,
+				Delay:      -time.Millisecond,
+				HTTPClient: server.Client(),
+			},
+			wantErrIs: crawler.ErrInvalidDelay,
+		},
+		{
+			name: "negative timeout",
+			opts: crawler.Options{
+				URL:        server.URL,
+				Depth:      1,
+				Timeout:    -time.Millisecond,
+				HTTPClient: server.Client(),
+			},
+			wantErrIs: crawler.ErrInvalidTimeout,
+		},
 	}
 
 	for _, tt := range tests {

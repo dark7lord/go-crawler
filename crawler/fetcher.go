@@ -10,36 +10,48 @@ import (
 	"time"
 )
 
-const minRetryDelay = 100 * time.Millisecond
+// minRetryInterval is the minimum pause between retry attempts.
+const minRetryInterval = 100 * time.Millisecond
 
 type fetcher struct {
+	client          *http.Client
+	requestInterval time.Duration
+	retryInterval   time.Duration
+	retries         uint
+	userAgent       string
+	timeout         time.Duration
+	limiter         *requestLimiter
+}
+
+type requestLimiter struct {
+	mu        sync.Mutex
+	lastStart time.Time
+}
+
+type fetcherConfig struct {
+	// client is required. A zero delay applies DefaultDelay; delay and timeout
+	// must be non-negative.
 	client    *http.Client
 	delay     time.Duration
 	retries   uint
 	userAgent string
 	timeout   time.Duration
-	limiter   *requestLimiter
 }
 
-type requestLimiter struct {
-	mu   sync.Mutex
-	next time.Time
-}
+func newFetcher(cfg fetcherConfig) fetcher {
+	requestInterval := cfg.delay
+	if requestInterval == 0 {
+		requestInterval = DefaultDelay
+	}
 
-func newFetcher(
-	client *http.Client,
-	delay time.Duration,
-	retries uint,
-	userAgent string,
-	timeout time.Duration,
-) fetcher {
 	return fetcher{
-		client:    client,
-		delay:     delay,
-		retries:   retries,
-		userAgent: userAgent,
-		timeout:   timeout,
-		limiter:   &requestLimiter{},
+		client:          cfg.client,
+		requestInterval: requestInterval,
+		retryInterval:   max(requestInterval, minRetryInterval),
+		retries:         cfg.retries,
+		userAgent:       cfg.userAgent,
+		timeout:         cfg.timeout,
+		limiter:         &requestLimiter{},
 	}
 }
 
@@ -73,7 +85,7 @@ func isRetryable(res *http.Response, err error) bool {
 		code == http.StatusTooManyRequests
 }
 
-func (ftr *fetcher) wait(ctx context.Context) error {
+func (ftr *fetcher) wait(ctx context.Context, interval time.Duration) error {
 	limiter := ftr.limiter
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
@@ -82,19 +94,21 @@ func (ftr *fetcher) wait(ctx context.Context) error {
 		return err
 	}
 
-	now := time.Now()
-	if !limiter.next.IsZero() && now.Before(limiter.next) {
-		timer := time.NewTimer(time.Until(limiter.next))
-		defer timer.Stop()
+	if !limiter.lastStart.IsZero() {
+		earliest := limiter.lastStart.Add(interval)
+		if now := time.Now(); now.Before(earliest) {
+			timer := time.NewTimer(time.Until(earliest))
+			defer timer.Stop()
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+			}
 		}
 	}
 
-	limiter.next = time.Now().Add(max(minRetryDelay, ftr.delay))
+	limiter.lastStart = time.Now()
 
 	return nil
 }
@@ -125,8 +139,9 @@ func (ftr *fetcher) headWithFallback(ctx context.Context, u *url.URL) (*http.Res
 
 func (ftr *fetcher) request(ctx context.Context, method string, u *url.URL) (*http.Response, error) {
 	remainingRetries := ftr.retries
+	interval := ftr.requestInterval
 	for {
-		if err := ftr.wait(ctx); err != nil {
+		if err := ftr.wait(ctx, interval); err != nil {
 			return nil, err
 		}
 
@@ -140,6 +155,7 @@ func (ftr *fetcher) request(ctx context.Context, method string, u *url.URL) (*ht
 			_ = res.Body.Close()
 		}
 		remainingRetries--
+		interval = ftr.retryInterval
 	}
 }
 

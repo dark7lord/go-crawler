@@ -29,17 +29,22 @@ func flags() []cli.Flag {
 	}
 }
 
-func resolveDelay(rps uint, delay time.Duration) time.Duration {
+const maxRPS = uint(time.Second / time.Nanosecond)
+
+func resolveDelay(rps uint, delay time.Duration) (time.Duration, error) {
+	if delay < 0 {
+		return 0, fmt.Errorf("%w: %s", crawler.ErrInvalidDelay, delay)
+	}
+
 	if rps == 0 {
-		return delay
+		return delay, nil
 	}
 
-	result := time.Second / time.Duration(rps)
-	if result < 0 {
-		return 0
+	if rps > maxRPS {
+		return 0, fmt.Errorf("invalid rps: %d", rps)
 	}
 
-	return result
+	return time.Second / time.Duration(rps), nil
 }
 
 func run(ctx context.Context, cmd *cli.Command) error {
@@ -53,14 +58,16 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("expected 1 url path, got '%s'", args)
 	}
 
-	delay := cmd.Duration("delay")
-	rps := cmd.Uint("rps")
+	delay, err := resolveDelay(cmd.Uint("rps"), cmd.Duration("delay"))
+	if err != nil {
+		return err
+	}
 
 	opts := crawler.Options{
 		URL:         cmd.Args().Get(0),
 		Depth:       cmd.Uint("depth"),
 		Retries:     cmd.Uint("retries"),
-		Delay:       resolveDelay(rps, delay),
+		Delay:       delay,
 		Timeout:     cmd.Duration("timeout"),
 		UserAgent:   cmd.String("user-agent"),
 		Concurrency: cmd.Uint("workers"),
@@ -73,7 +80,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("analyze error: %w", errAnalyze)
 	}
 
-	_, err := fmt.Fprintln(cmd.Root().Writer, string(data))
+	_, err = fmt.Fprintln(cmd.Root().Writer, string(data))
 
 	return err
 }

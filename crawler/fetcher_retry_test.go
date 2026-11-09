@@ -31,7 +31,10 @@ func newStatusFetcher(t *testing.T, retries uint, statuses ...int) (*fetcher, *u
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
 
-	ftr := newFetcher(server.Client(), 0, retries, "", 0)
+	ftr := newFetcher(fetcherConfig{
+		client:  server.Client(),
+		retries: retries,
+	})
 
 	return &ftr, u, &requests
 }
@@ -161,7 +164,7 @@ func TestFetcherHeadWithFallback(t *testing.T) {
 
 			u, err := url.Parse(server.URL)
 			require.NoError(t, err)
-			ftr := newFetcher(server.Client(), 0, 0, "", 0)
+			ftr := newFetcher(fetcherConfig{client: server.Client()})
 
 			resp, err := ftr.headWithFallback(t.Context(), u)
 			require.NoError(t, err)
@@ -218,7 +221,10 @@ func TestFetcherTransportErrorRetry(t *testing.T) {
 
 			u, err := url.Parse(server.URL)
 			require.NoError(t, err)
-			ftr := newFetcher(server.Client(), 0, tt.retries, "", 0)
+			ftr := newFetcher(fetcherConfig{
+				client:  server.Client(),
+				retries: tt.retries,
+			})
 
 			resp, err := ftr.get(t.Context(), u)
 			if resp != nil {
@@ -250,7 +256,11 @@ func TestFetcherCancelStopsWaitingBeforeRetry(t *testing.T) {
 
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
-	ftr := newFetcher(server.Client(), 5*time.Second, 1, "", 0)
+	ftr := newFetcher(fetcherConfig{
+		client:  server.Client(),
+		delay:   5 * time.Second,
+		retries: 1,
+	})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
@@ -288,7 +298,10 @@ func TestFetcherDoesNotRetryCanceledContext(t *testing.T) {
 
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
-	ftr := newFetcher(server.Client(), 0, 3, "", 0)
+	ftr := newFetcher(fetcherConfig{
+		client:  server.Client(),
+		retries: 3,
+	})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -337,7 +350,10 @@ func TestFetcherClosesIntermediateResponseBody(t *testing.T) {
 	}}}
 	u, err := url.Parse("http://example.test/")
 	require.NoError(t, err)
-	ftr := newFetcher(client, 0, 1, "", 0)
+	ftr := newFetcher(fetcherConfig{
+		client:  client,
+		retries: 1,
+	})
 
 	resp, err := ftr.get(t.Context(), u)
 	require.NoError(t, err)
@@ -349,7 +365,7 @@ func TestFetcherClosesIntermediateResponseBody(t *testing.T) {
 	require.True(t, final.closed)
 }
 
-func TestFetcherRetryDelay(t *testing.T) {
+func TestFetcherRetryInterval(t *testing.T) {
 	const configuredDelay = 150 * time.Millisecond
 
 	tests := []struct {
@@ -358,13 +374,18 @@ func TestFetcherRetryDelay(t *testing.T) {
 		wantMin time.Duration
 	}{
 		{
-			name:    "uses configured delay",
+			name:    "retry uses explicit delay",
 			delay:   configuredDelay,
 			wantMin: configuredDelay - 10*time.Millisecond,
 		},
 		{
-			name:    "uses default delay",
-			wantMin: 90 * time.Millisecond,
+			name:    "retry keeps minimum interval for short explicit delay",
+			delay:   20 * time.Millisecond,
+			wantMin: minRetryInterval - 10*time.Millisecond,
+		},
+		{
+			name:    "retry uses minimum interval when delay is zero",
+			wantMin: minRetryInterval - 10*time.Millisecond,
 		},
 	}
 
@@ -387,7 +408,11 @@ func TestFetcherRetryDelay(t *testing.T) {
 
 			u, err := url.Parse(server.URL)
 			require.NoError(t, err)
-			ftr := newFetcher(server.Client(), tt.delay, 1, "", 0)
+			ftr := newFetcher(fetcherConfig{
+				client:  server.Client(),
+				delay:   tt.delay,
+				retries: 1,
+			})
 
 			resp, err := ftr.get(t.Context(), u)
 			require.NoError(t, err)
