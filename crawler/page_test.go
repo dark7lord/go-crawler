@@ -127,11 +127,12 @@ func TestPageTimeout(t *testing.T) {
 }
 
 func TestPageTimeoutWhileReadingBody(t *testing.T) {
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("<title>Home</title>"))
 		w.(http.Flusher).Flush()
 		<-r.Context().Done()
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	page := firstPage(t, crawler.Options{
 		URL:        server.URL,
@@ -147,11 +148,12 @@ func TestPageTimeoutWhileReadingBody(t *testing.T) {
 
 func TestPageRetriesUseTimeoutPerAttempt(t *testing.T) {
 	var requests atomic.Int32
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
 		time.Sleep(30 * time.Millisecond)
 		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	page := firstPage(t, crawler.Options{
 		URL:        server.URL,

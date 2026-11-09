@@ -1,8 +1,7 @@
-package crawler
+package fetch
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,32 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
-
-func newStatusFetcher(t *testing.T, retries uint, statuses ...int) (*fetcher, *url.URL, *atomic.Int32) {
-	t.Helper()
-	require.NotEmpty(t, statuses)
-
-	var requests atomic.Int32
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		index := int(requests.Add(1)) - 1
-		if index >= len(statuses) {
-			index = len(statuses) - 1
-		}
-		w.WriteHeader(statuses[index])
-	})
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-
-	u, err := url.Parse(server.URL)
-	require.NoError(t, err)
-
-	ftr := newFetcher(fetcherConfig{
-		client:  server.Client(),
-		retries: retries,
-	})
-
-	return &ftr, u, &requests
-}
 
 func TestFetcherHTTPRetryBehavior(t *testing.T) {
 	tests := []struct {
@@ -94,83 +67,11 @@ func TestFetcherHTTPRetryBehavior(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ftr, u, requests := newStatusFetcher(t, tt.retries, tt.statuses...)
 
-			resp, err := ftr.get(t.Context(), u)
+			resp, err := ftr.Get(t.Context(), u)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantStatus, resp.StatusCode)
 			require.NoError(t, resp.Body.Close())
 			require.Equal(t, tt.wantRequests, requests.Load())
-		})
-	}
-}
-
-func TestFetcherHeadWithFallback(t *testing.T) {
-	tests := []struct {
-		name        string
-		head        func(t *testing.T, w http.ResponseWriter)
-		getStatus   int
-		wantStatus  int
-		wantMethods []string
-	}{
-		{
-			name: "uses head response",
-			head: func(_ *testing.T, w http.ResponseWriter) {
-				w.WriteHeader(http.StatusNotFound)
-			},
-			getStatus:   http.StatusOK,
-			wantStatus:  http.StatusNotFound,
-			wantMethods: []string{http.MethodHead},
-		},
-		{
-			name: "falls back when head is unsupported",
-			head: func(_ *testing.T, w http.ResponseWriter) {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-			},
-			getStatus:   http.StatusNotFound,
-			wantStatus:  http.StatusNotFound,
-			wantMethods: []string{http.MethodHead, http.MethodGet},
-		},
-		{
-			name: "falls back after head transport error",
-			head: func(t *testing.T, w http.ResponseWriter) {
-				t.Helper()
-
-				conn, _, err := w.(http.Hijacker).Hijack()
-				if err != nil {
-					t.Errorf("hijack connection: %v", err)
-
-					return
-				}
-				_ = conn.Close()
-			},
-			getStatus:   http.StatusOK,
-			wantStatus:  http.StatusOK,
-			wantMethods: []string{http.MethodHead, http.MethodGet},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var methods []string
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				methods = append(methods, r.Method)
-				if r.Method == http.MethodHead {
-					tt.head(t, w)
-
-					return
-				}
-				w.WriteHeader(tt.getStatus)
-			}))
-			t.Cleanup(server.Close)
-
-			u, err := url.Parse(server.URL)
-			require.NoError(t, err)
-			ftr := newFetcher(fetcherConfig{client: server.Client()})
-
-			resp, err := ftr.headWithFallback(t.Context(), u)
-			require.NoError(t, err)
-			require.Equal(t, tt.wantStatus, resp.StatusCode)
-			require.NoError(t, resp.Body.Close())
-			require.Equal(t, tt.wantMethods, methods)
 		})
 	}
 }
@@ -221,12 +122,12 @@ func TestFetcherTransportErrorRetry(t *testing.T) {
 
 			u, err := url.Parse(server.URL)
 			require.NoError(t, err)
-			ftr := newFetcher(fetcherConfig{
-				client:  server.Client(),
-				retries: tt.retries,
+			ftr := New(Config{
+				Client:  server.Client(),
+				Retries: tt.retries,
 			})
 
-			resp, err := ftr.get(t.Context(), u)
+			resp, err := ftr.Get(t.Context(), u)
 			if resp != nil {
 				_ = resp.Body.Close()
 			}
@@ -256,10 +157,10 @@ func TestFetcherCancelStopsWaitingBeforeRetry(t *testing.T) {
 
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
-	ftr := newFetcher(fetcherConfig{
-		client:  server.Client(),
-		delay:   5 * time.Second,
-		retries: 1,
+	ftr := New(Config{
+		Client:  server.Client(),
+		Delay:   5 * time.Second,
+		Retries: 1,
 	})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
@@ -268,7 +169,7 @@ func TestFetcherCancelStopsWaitingBeforeRetry(t *testing.T) {
 	respCh := make(chan *http.Response, 1)
 	errCh := make(chan error, 1)
 	go func() {
-		resp, err := ftr.get(ctx, u)
+		resp, err := ftr.Get(ctx, u)
 		if resp != nil {
 			_ = resp.Body.Close()
 		}
@@ -291,22 +192,23 @@ func TestFetcherCancelStopsWaitingBeforeRetry(t *testing.T) {
 
 func TestFetcherDoesNotRetryCanceledContext(t *testing.T) {
 	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		requests.Add(1)
-	}))
+	})
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
 	u, err := url.Parse(server.URL)
 	require.NoError(t, err)
-	ftr := newFetcher(fetcherConfig{
-		client:  server.Client(),
-		retries: 3,
+	ftr := New(Config{
+		Client:  server.Client(),
+		Retries: 3,
 	})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	resp, err := ftr.get(ctx, u)
+	resp, err := ftr.Get(ctx, u)
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
@@ -314,31 +216,6 @@ func TestFetcherDoesNotRetryCanceledContext(t *testing.T) {
 	require.Nil(t, resp)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Zero(t, requests.Load())
-}
-
-type responseSequence struct {
-	responses []*http.Response
-}
-
-func (s *responseSequence) RoundTrip(*http.Request) (*http.Response, error) {
-	resp := s.responses[0]
-	s.responses = s.responses[1:]
-
-	return resp, nil
-}
-
-type closeTrackingBody struct {
-	closed bool
-}
-
-func (*closeTrackingBody) Read([]byte) (int, error) {
-	return 0, io.EOF
-}
-
-func (b *closeTrackingBody) Close() error {
-	b.closed = true
-
-	return nil
 }
 
 func TestFetcherClosesIntermediateResponseBody(t *testing.T) {
@@ -350,12 +227,12 @@ func TestFetcherClosesIntermediateResponseBody(t *testing.T) {
 	}}}
 	u, err := url.Parse("http://example.test/")
 	require.NoError(t, err)
-	ftr := newFetcher(fetcherConfig{
-		client:  client,
-		retries: 1,
+	ftr := New(Config{
+		Client:  client,
+		Retries: 1,
 	})
 
-	resp, err := ftr.get(t.Context(), u)
+	resp, err := ftr.Get(t.Context(), u)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.True(t, intermediate.closed)
@@ -408,13 +285,13 @@ func TestFetcherRetryInterval(t *testing.T) {
 
 			u, err := url.Parse(server.URL)
 			require.NoError(t, err)
-			ftr := newFetcher(fetcherConfig{
-				client:  server.Client(),
-				delay:   tt.delay,
-				retries: 1,
+			ftr := New(Config{
+				Client:  server.Client(),
+				Delay:   tt.delay,
+				Retries: 1,
 			})
 
-			resp, err := ftr.get(t.Context(), u)
+			resp, err := ftr.Get(t.Context(), u)
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 			require.NoError(t, resp.Body.Close())

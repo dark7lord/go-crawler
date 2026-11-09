@@ -6,12 +6,14 @@ import (
 	"net/url"
 	"sort"
 	"sync"
+
+	"code/internal/fetch"
 )
 
 const defaultConcurrency = 1
 
 type crawler struct {
-	fetcher      fetcher
+	fetcher      *fetch.Fetcher
 	rootURL      *url.URL
 	host         string
 	depth        uint
@@ -43,12 +45,12 @@ func newCrawler(opts Options) (*crawler, error) {
 	}
 
 	return &crawler{
-		fetcher: newFetcher(fetcherConfig{
-			client:    opts.HTTPClient,
-			delay:     opts.Delay,
-			retries:   opts.Retries,
-			userAgent: opts.UserAgent,
-			timeout:   opts.Timeout,
+		fetcher: fetch.New(fetch.Config{
+			Client:    opts.HTTPClient,
+			Delay:     opts.Delay,
+			Retries:   opts.Retries,
+			UserAgent: opts.UserAgent,
+			Timeout:   opts.Timeout,
 		}),
 		rootURL:     normURL,
 		host:        normURL.Host,

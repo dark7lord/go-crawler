@@ -86,7 +86,7 @@ func (crw *crawler) fetchPage(
 		}
 	}()
 
-	resp, err := crw.fetcher.get(ctx, pageURL)
+	resp, err := crw.fetcher.Get(ctx, pageURL)
 	if err != nil && ctx.Err() != nil {
 		return page, liveLinks, false
 	}

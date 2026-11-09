@@ -126,7 +126,7 @@ func waitForAsset(ctx context.Context, entry *assetCacheEntry) (*Asset, error) {
 func (crw *crawler) loadAssetOnce(ctx context.Context, ref assetReference) *Asset {
 	asset := &Asset{URL: ref.URL.String(), Type: ref.Type}
 
-	resp, err := crw.fetcher.get(ctx, ref.URL)
+	resp, err := crw.fetcher.Get(ctx, ref.URL)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil

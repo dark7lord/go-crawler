@@ -172,9 +172,10 @@ func TestAnalyzeCancellation(t *testing.T) {
 }
 
 func TestAnalyzeEmptyCollectionsAreArrays(t *testing.T) {
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `<p>no assets</p>`)
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	report := analyzeReport(t, crawler.Options{
 		URL:        server.URL,
@@ -189,7 +190,7 @@ func TestAnalyzeEmptyCollectionsAreArrays(t *testing.T) {
 }
 
 func TestAnalyzeJSONMatchesExampleWithIndenting(t *testing.T) {
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
 			_, _ = fmt.Fprint(w, `
@@ -206,7 +207,8 @@ func TestAnalyzeJSONMatchesExampleWithIndenting(t *testing.T) {
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	options := crawler.Options{URL: server.URL, Depth: 1, HTTPClient: server.Client()}
 	unindentedJSON, err := crawler.Analyze(t.Context(), options)

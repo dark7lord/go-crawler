@@ -66,7 +66,7 @@ func TestCrawlWorkerLimit(t *testing.T) {
 }
 
 func TestCrawlConcurrencyDeterminism(t *testing.T) {
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
 			_, _ = fmt.Fprint(w, `<a href="/a">a</a><a href="/b">b</a>`)
@@ -75,7 +75,8 @@ func TestCrawlConcurrencyDeterminism(t *testing.T) {
 		case "/b":
 			_, _ = fmt.Fprint(w, `<a href="/c">c</a>`)
 		}
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	wantDepths := map[string]uint{"": 0, "/a": 1, "/b": 1, "/c": 2}
 	wantURLs := []string{server.URL, server.URL + "/a", server.URL + "/b", server.URL + "/c"}

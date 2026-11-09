@@ -29,11 +29,12 @@ func waitSignal[T any](t *testing.T, ch <-chan T, msg string) T {
 }
 
 func TestPageAssetsIncludeStatusAndSize(t *testing.T) {
-	externalServer := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	externalHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, "external js")
-	}))
+	})
+	externalServer := newTestServer(t, externalHandler)
 
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
 			_, _ = fmt.Fprintf(w, `
@@ -48,7 +49,8 @@ func TestPageAssetsIncludeStatusAndSize(t *testing.T) {
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	report := analyzeReport(t, crawler.Options{
 		URL:        server.URL,
@@ -81,7 +83,7 @@ func TestPageAssetsIncludeStatusAndSize(t *testing.T) {
 
 func TestAssetSizeWithoutContentLength(t *testing.T) {
 	const body = "chunked asset body"
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			_, _ = fmt.Fprint(w, `<img src="/stream">`)
 			return
@@ -89,7 +91,8 @@ func TestAssetSizeWithoutContentLength(t *testing.T) {
 
 		w.(http.Flusher).Flush()
 		_, _ = fmt.Fprint(w, body)
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	report := analyzeReport(t, crawler.Options{
 		URL:        server.URL,

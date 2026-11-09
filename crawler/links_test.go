@@ -39,7 +39,7 @@ func newLinkSite(t *testing.T, root string, routes map[string]linkRoute) (*httpt
 	var mu sync.Mutex
 	requests := map[string]int32{}
 
-	server := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		requests[r.URL.Path]++
 		mu.Unlock()
@@ -63,7 +63,8 @@ func newLinkSite(t *testing.T, root string, routes map[string]linkRoute) (*httpt
 		}
 		w.WriteHeader(status)
 		_, _ = fmt.Fprint(w, route.body)
-	}))
+	})
+	server := newTestServer(t, handler)
 
 	return server, func(path string) int32 {
 		mu.Lock()
@@ -182,10 +183,11 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 
 func TestAnalyzeExternalBrokenLinkIsCheckedButNotCrawled(t *testing.T) {
 	var externalRequests atomic.Int32
-	externalServer := newTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	externalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		externalRequests.Add(1)
 		http.NotFound(w, r)
-	}))
+	})
+	externalServer := newTestServer(t, externalHandler)
 
 	root := fmt.Sprintf(
 		`<a href="/child">internal</a><a href="%s/outside">external</a>`,

@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"code/internal/fetch"
 )
 
 // DefaultDelay is the request interval used when Options.Delay is zero.
-const DefaultDelay = 100 * time.Millisecond
+const DefaultDelay = fetch.DefaultDelay
 
 // ErrInvalidDelay is returned when Options.Delay is negative.
 var ErrInvalidDelay = errors.New("invalid delay")

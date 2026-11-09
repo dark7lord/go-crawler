@@ -85,14 +85,15 @@ func TestRunPrintsReport(t *testing.T) {
 }
 
 func TestRunForwardsDepth(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			_, _ = w.Write([]byte(`<a href="/child">child</a>`))
 			return
 		}
 
 		_, _ = w.Write([]byte(`<a href="/grandchild">grandchild</a>`))
-	}))
+	})
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
 	code, stdout, stderr := runApp("--depth", "2", server.URL)
@@ -120,9 +121,10 @@ func TestRunIndentJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				_, _ = w.Write([]byte("<title>Home</title>"))
-			}))
+			})
+			server := httptest.NewServer(handler)
 			t.Cleanup(server.Close)
 
 			args := make([]string, 0, len(tt.args)+1)
