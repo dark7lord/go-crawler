@@ -48,7 +48,8 @@ func resolveDelay(rps uint, delay time.Duration) (time.Duration, error) {
 }
 
 func run(ctx context.Context, cmd *cli.Command) error {
-	if cmd.NArg() == 0 || cmd.Args().Get(0) == "" {
+	urlArg := cmd.Args().First()
+	if urlArg == "" {
 		return cli.ShowRootCommandHelp(cmd)
 	}
 
@@ -63,8 +64,19 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	opts := crawler.Options{
-		URL:         cmd.Args().Get(0),
+	data, err := crawler.Analyze(ctx, crawlerOptions(cmd, delay))
+	if err != nil {
+		return fmt.Errorf("analyze error: %w", err)
+	}
+
+	_, err = fmt.Fprintln(cmd.Root().Writer, string(data))
+
+	return err
+}
+
+func crawlerOptions(cmd *cli.Command, delay time.Duration) crawler.Options {
+	return crawler.Options{
+		URL:         cmd.Args().First(),
 		Depth:       cmd.Uint("depth"),
 		Retries:     cmd.Uint("retries"),
 		Delay:       delay,
@@ -74,15 +86,6 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		HTTPClient:  &http.Client{},
 		IndentJSON:  cmd.Bool("indent-json"),
 	}
-
-	data, errAnalyze := crawler.Analyze(ctx, opts)
-	if errAnalyze != nil {
-		return fmt.Errorf("analyze error: %w", errAnalyze)
-	}
-
-	_, err = fmt.Fprintln(cmd.Root().Writer, string(data))
-
-	return err
 }
 
 func newCommand(stdout, stderr io.Writer) *cli.Command {

@@ -32,15 +32,15 @@ func NewLoader(fetcher *fetch.Fetcher) *Loader {
 
 // Load fetches all refs, sharing concurrent loads between callers.
 func (loader *Loader) Load(ctx context.Context, refs []Ref) []Asset {
-	assets := make([]Asset, 0, len(refs))
+	loaded := make([]Asset, 0, len(refs))
 
 	for _, ref := range refs {
 		if asset := loader.load(ctx, ref); asset != nil {
-			assets = append(assets, *asset)
+			loaded = append(loaded, *asset)
 		}
 	}
 
-	return assets
+	return loaded
 }
 
 func (loader *Loader) load(ctx context.Context, ref Ref) *Asset {

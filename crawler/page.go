@@ -50,7 +50,7 @@ func (p *Page) setHTTPStatus(code int) {
 	p.HTTPStatus = code
 
 	status := statusOK
-	if code >= 400 {
+	if code >= http.StatusBadRequest {
 		status = statusError
 	}
 
@@ -96,11 +96,13 @@ func (crw *crawler) fetchPage(
 	}()
 
 	resp, err := crw.fetcher.Get(ctx, pageURL)
-	if err != nil && ctx.Err() != nil {
-		return page, liveLinks, false
-	}
 	if err != nil {
+		if ctx.Err() != nil {
+			return page, liveLinks, false
+		}
+
 		page.setError(err)
+
 		return page, liveLinks, true
 	}
 	defer func() { _ = resp.Body.Close() }()

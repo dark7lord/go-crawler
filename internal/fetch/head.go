@@ -14,15 +14,12 @@ func (ftr *Fetcher) Head(ctx context.Context, u *url.URL) (*http.Response, error
 		resp.StatusCode != http.StatusNotImplemented {
 		return resp, nil
 	}
-	if ctx.Err() != nil {
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
 
-		return nil, ctx.Err()
-	}
 	if resp != nil {
 		_ = resp.Body.Close()
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	return ftr.Get(ctx, u)

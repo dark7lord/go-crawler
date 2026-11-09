@@ -100,11 +100,8 @@ func compareType(a, b Ref) int {
 
 func hasRelToken(rel, token string) bool {
 	tokens := strings.Fields(rel)
-	for _, candidate := range tokens {
-		if strings.EqualFold(candidate, token) {
-			return true
-		}
-	}
 
-	return false
+	return slices.ContainsFunc(tokens, func(candidate string) bool {
+		return strings.EqualFold(candidate, token)
+	})
 }

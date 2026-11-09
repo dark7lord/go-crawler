@@ -87,6 +87,10 @@ func (crw *crawler) crawl(ctx context.Context) {
 		}
 	}
 
+	crw.sortPages()
+}
+
+func (crw *crawler) sortPages() {
 	sort.Slice(crw.pages, func(a, b int) bool {
 		if crw.pages[a].Depth != crw.pages[b].Depth {
 			return crw.pages[a].Depth < crw.pages[b].Depth
@@ -140,7 +144,12 @@ func (crw *crawler) processLevel(ctx context.Context, level []foundURL) []crawlR
 	wg.Wait()
 	close(results)
 
-	levelResults := make([]crawlResult, 0, len(level))
+	return collectResults(results, len(level))
+}
+
+func collectResults(results <-chan crawlResult, capacity int) []crawlResult {
+	levelResults := make([]crawlResult, 0, capacity)
+
 	for result := range results {
 		levelResults = append(levelResults, result)
 	}
