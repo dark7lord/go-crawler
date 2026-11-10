@@ -27,7 +27,15 @@ func Normalize(raw string) (*url.URL, error) {
 		return nil, fmt.Errorf("%w: %q", ErrInvalid, raw)
 	}
 
+	stripFragment(u)
+
 	return u, nil
+}
+
+// stripFragment removes the part of u that is never sent in an HTTP request.
+func stripFragment(u *url.URL) {
+	u.Fragment = ""
+	u.RawFragment = ""
 }
 
 // Resolve makes href absolute against base. The false result means the link
@@ -52,6 +60,8 @@ func Resolve(base *url.URL, href string) (*url.URL, bool) {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return nil, false
 	}
+
+	stripFragment(u)
 
 	return u, true
 }

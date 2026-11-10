@@ -20,6 +20,7 @@ func TestNormalize(t *testing.T) {
 		{name: "scheme-less localhost with port", input: "localhost:8080/x", want: "http://localhost:8080/x"},
 		{name: "scheme-less local ip with port", input: "127.0.0.1:3000", want: "http://127.0.0.1:3000"},
 		{name: "path and query preserved", input: "example.com/foo?x=1", want: "http://example.com/foo?x=1"},
+		{name: "fragment removed", input: "https://ya.ru/path?x=1#intro", want: "https://ya.ru/path?x=1"},
 		{name: "surrounding spaces are trimmed", input: "  ya.ru  ", want: "http://ya.ru"},
 		{name: "unsupported scheme", input: "ftp://x", wantErr: true},
 		{name: "javascript scheme", input: "javascript:alert(1)", wantErr: true},
@@ -75,6 +76,18 @@ func TestResolve(t *testing.T) {
 			name: "surrounding spaces are trimmed",
 			href: "  /about  ",
 			want: "https://example.test/about",
+			ok:   true,
+		},
+		{
+			name: "fragment removed",
+			href: "/about#team",
+			want: "https://example.test/about",
+			ok:   true,
+		},
+		{
+			name: "asset fragment removed",
+			href: "../images/logo.png#one",
+			want: "https://example.test/images/logo.png",
 			ok:   true,
 		},
 		{

@@ -32,7 +32,8 @@ pages. The default is `10`.
 
 Only pages on the same host as the start URL are crawled. Links to other hosts
 are checked for broken responses but are not crawled as pages. Each page
-appears in the report once.
+appears in the report once. URL fragments are ignored when identifying pages
+and assets because they are never sent in HTTP requests.
 
 ```bash
 go run ./cmd/hexlet-go-crawler --depth 2 --workers 4 https://example.com

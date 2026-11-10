@@ -108,6 +108,37 @@ func TestAssetSizeWithoutContentLength(t *testing.T) {
 	}}, report.Pages[0].Assets)
 }
 
+func TestAssetFragmentsAreRequestedOnce(t *testing.T) {
+	var requests atomic.Int32
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = fmt.Fprint(w, `<img src="/pic.png#one"><img src="/pic.png#two">`)
+		case "/pic.png":
+			requests.Add(1)
+			_, _ = fmt.Fprint(w, "image")
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	server := newTestServer(t, handler)
+
+	report := analyzeReport(t, crawler.Options{
+		URL:        server.URL,
+		Depth:      1,
+		HTTPClient: server.Client(),
+	})
+	require.Len(t, report.Pages, 1)
+	require.Equal(t, []crawler.Asset{{
+		URL:        server.URL + "/pic.png",
+		Type:       "image",
+		StatusCode: http.StatusOK,
+		SizeBytes:  int64(len("image")),
+	}}, report.Pages[0].Assets)
+	require.Equal(t, int32(1), requests.Load())
+}
+
 func TestAssetSharedAcrossPagesIsRequestedOnce(t *testing.T) {
 	var sharedRequests atomic.Int32
 	var secondPageRequests atomic.Int32

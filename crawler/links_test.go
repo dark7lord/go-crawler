@@ -181,6 +181,34 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 	}
 }
 
+func TestAnalyzeStartURLFragmentDoesNotDuplicatePage(t *testing.T) {
+	var rootGets atomic.Int32
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		if r.Method == http.MethodGet {
+			rootGets.Add(1)
+			_, _ = fmt.Fprint(w, `<a href="/">home</a>`)
+		}
+	})
+	server := newTestServer(t, handler)
+
+	report := analyzeReport(t, crawler.Options{
+		URL:        server.URL + "/#intro",
+		Depth:      2,
+		HTTPClient: server.Client(),
+	})
+	require.Len(t, report.Pages, 1)
+	require.Equal(t, server.URL+"/", report.RootURL)
+	require.Equal(t, server.URL+"/", report.Pages[0].URL)
+	require.Equal(t, int32(1), rootGets.Load())
+}
+
 func TestAnalyzeExternalBrokenLinkIsCheckedButNotCrawled(t *testing.T) {
 	var externalRequests atomic.Int32
 	externalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
