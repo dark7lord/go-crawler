@@ -124,7 +124,8 @@ external scripts, and stylesheets referenced by the page, sorted by type
 response body. Asset requests share the crawl's retries and request interval.
 
 Duplicate asset URLs are removed within each page, and the fetched result is
-shared across pages during the same crawl.
+shared across pages during the same crawl. Every page reports identical asset
+data for the same URL, including `type`.
 
 ## Rate limiting
 

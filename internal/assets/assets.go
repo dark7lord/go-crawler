@@ -2,6 +2,7 @@
 package assets
 
 import (
+	"cmp"
 	"net/url"
 	"slices"
 	"strings"
@@ -59,7 +60,9 @@ func Extract(doc *goquery.Document, pageURL *url.URL) []Ref {
 	selection := doc.Find("img[src], script[src], link[href]")
 	selection.Each(addAsset)
 
-	slices.SortStableFunc(assets, compareType)
+	slices.SortStableFunc(assets, func(a, b Ref) int {
+		return cmp.Compare(a.Type, b.Type)
+	})
 
 	return assets
 }
@@ -92,10 +95,6 @@ func extractRef(sel *goquery.Selection, pageURL *url.URL) (Ref, bool) {
 	}
 
 	return Ref{URL: absoluteURL, Type: typ}, true
-}
-
-func compareType(a, b Ref) int {
-	return strings.Compare(string(a.Type), string(b.Type))
 }
 
 func hasRelToken(rel, token string) bool {

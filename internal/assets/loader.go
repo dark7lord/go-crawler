@@ -1,10 +1,12 @@
 package assets
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sync"
 
 	"code/internal/fetch"
@@ -40,6 +42,10 @@ func (loader *Loader) Load(ctx context.Context, refs []Ref) []Asset {
 		}
 	}
 
+	slices.SortStableFunc(loaded, func(a, b Asset) int {
+		return cmp.Compare(a.Type, b.Type)
+	})
+
 	return loaded
 }
 
@@ -62,8 +68,6 @@ func (loader *Loader) load(ctx context.Context, ref Ref) *Asset {
 		if cached == nil {
 			continue
 		}
-
-		cached.Type = ref.Type
 
 		return cached
 	}

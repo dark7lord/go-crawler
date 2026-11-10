@@ -161,9 +161,9 @@ func TestAssetSharedAcrossPagesIsRequestedOnce(t *testing.T) {
 			if secondPageRequests.Add(1) == 2 {
 				close(secondPageFetchStarted)
 			}
-			_, _ = fmt.Fprint(w, `<script src="/shared.png"></script>`)
+			_, _ = fmt.Fprint(w, `<img src="/shared.png">`)
 		case "/c":
-			_, _ = fmt.Fprint(w, `<link rel="stylesheet" href="/shared.png">`)
+			_, _ = fmt.Fprint(w, `<img src="/shared.png">`)
 		case "/shared.png":
 			if sharedRequests.Add(1) == 1 {
 				close(sharedStarted)
@@ -212,14 +212,48 @@ func TestAssetSharedAcrossPagesIsRequestedOnce(t *testing.T) {
 	}}, report.Pages[1].Assets)
 	require.Equal(t, []crawler.Asset{{
 		URL:        server.URL + "/shared.png",
-		Type:       "style",
+		Type:       "image",
 		StatusCode: http.StatusOK,
 		SizeBytes:  int64(len("shared asset")),
 	}}, report.Pages[2].Assets)
 	require.Equal(t, []crawler.Asset{{
 		URL:        server.URL + "/shared.png",
-		Type:       "script",
+		Type:       "image",
 		StatusCode: http.StatusOK,
 		SizeBytes:  int64(len("shared asset")),
 	}}, report.Pages[3].Assets)
+}
+
+func TestAssetTypeIsConsistentAcrossPages(t *testing.T) {
+	var requests atomic.Int32
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = fmt.Fprint(w, `<a href="/image">image</a><a href="/script">script</a>`)
+		case "/image":
+			_, _ = fmt.Fprint(w, `<img src="/shared.png">`)
+		case "/script":
+			_, _ = fmt.Fprint(w, `<script src="/shared.png"></script>`)
+		case "/shared.png":
+			requests.Add(1)
+			_, _ = fmt.Fprint(w, "shared asset")
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	server := newTestServer(t, handler)
+
+	report := analyzeReport(t, crawler.Options{
+		URL:         server.URL,
+		Depth:       2,
+		Concurrency: 2,
+		HTTPClient:  server.Client(),
+	})
+	require.Equal(t, int32(1), requests.Load())
+	require.Len(t, report.Pages, 3)
+	require.Equal(t, report.Pages[1].Assets, report.Pages[2].Assets)
+	require.Len(t, report.Pages[1].Assets, 1)
+	require.Equal(t, server.URL+"/shared.png", report.Pages[1].Assets[0].URL)
+	require.NotEmpty(t, report.Pages[1].Assets[0].Type)
 }
