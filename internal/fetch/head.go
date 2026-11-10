@@ -6,12 +6,11 @@ import (
 	"net/url"
 )
 
-// Head checks a resource with HEAD and falls back to GET when HEAD is
-// unsupported.
+// Head checks a resource with HEAD and confirms any failed HEAD with GET,
+// because servers may serve HEAD and GET differently.
 func (ftr *Fetcher) Head(ctx context.Context, u *url.URL) (*http.Response, error) {
 	resp, err := ftr.request(ctx, http.MethodHead, u)
-	if err == nil && resp.StatusCode != http.StatusMethodNotAllowed &&
-		resp.StatusCode != http.StatusNotImplemented {
+	if err == nil && resp.StatusCode < http.StatusBadRequest {
 		return resp, nil
 	}
 

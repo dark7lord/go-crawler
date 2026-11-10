@@ -18,13 +18,22 @@ func TestFetcherHead(t *testing.T) {
 		wantMethods []string
 	}{
 		{
-			name: "uses head response",
+			name: "uses successful head response",
+			head: func(_ *testing.T, w http.ResponseWriter) {
+				w.WriteHeader(http.StatusOK)
+			},
+			getStatus:   http.StatusInternalServerError,
+			wantStatus:  http.StatusOK,
+			wantMethods: []string{http.MethodHead},
+		},
+		{
+			name: "confirms head error with get",
 			head: func(_ *testing.T, w http.ResponseWriter) {
 				w.WriteHeader(http.StatusNotFound)
 			},
 			getStatus:   http.StatusOK,
-			wantStatus:  http.StatusNotFound,
-			wantMethods: []string{http.MethodHead},
+			wantStatus:  http.StatusOK,
+			wantMethods: []string{http.MethodHead, http.MethodGet},
 		},
 		{
 			name: "falls back when head is unsupported",

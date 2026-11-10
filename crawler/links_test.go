@@ -29,8 +29,9 @@ func brokenLink(url string, statusCode int) crawler.BrokenLink {
 }
 
 type linkRoute struct {
-	status int
-	body   string
+	headStatus int
+	status     int
+	body       string
 }
 
 func newLinkSite(t *testing.T, root string, routes map[string]linkRoute) (*httptest.Server, func(string) int32) {
@@ -58,6 +59,9 @@ func newLinkSite(t *testing.T, root string, routes map[string]linkRoute) (*httpt
 		}
 
 		status := route.status
+		if r.Method == http.MethodHead && route.headStatus != 0 {
+			status = route.headStatus
+		}
 		if status == 0 {
 			status = http.StatusOK
 		}
@@ -97,14 +101,14 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 			depth:        1,
 			wantPages:    1,
 			wantBroken:   []brokenExpectation{{path: "/missing", status: http.StatusNotFound}},
-			wantRequests: map[string]int32{"/missing": 1},
+			wantRequests: map[string]int32{"/missing": 2},
 		},
 		{
 			name:         "depth zero still checks root links",
 			root:         `<a href="/missing">missing</a>`,
 			wantPages:    1,
 			wantBroken:   []brokenExpectation{{path: "/missing", status: http.StatusNotFound}},
-			wantRequests: map[string]int32{"/missing": 1},
+			wantRequests: map[string]int32{"/missing": 2},
 		},
 		{
 			name:         "depth one checks children without crawling them",
@@ -113,7 +117,7 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 			depth:        1,
 			wantPages:    1,
 			wantBroken:   []brokenExpectation{{path: "/missing", status: http.StatusNotFound}},
-			wantRequests: map[string]int32{"/child": 1, "/missing": 1},
+			wantRequests: map[string]int32{"/child": 1, "/missing": 2},
 		},
 		{
 			name:           "depth two checks links on crawled children",
@@ -123,7 +127,7 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 			wantPages:      2,
 			wantBrokenPage: 1,
 			wantBroken:     []brokenExpectation{{path: "/missing", status: http.StatusNotFound}},
-			wantRequests:   map[string]int32{"/missing": 1},
+			wantRequests:   map[string]int32{"/missing": 2},
 		},
 		{
 			name:         "fragments are checked once",
@@ -131,7 +135,7 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 			depth:        1,
 			wantPages:    1,
 			wantBroken:   []brokenExpectation{{path: "/missing", status: http.StatusNotFound}},
-			wantRequests: map[string]int32{"/missing": 1},
+			wantRequests: map[string]int32{"/missing": 2},
 		},
 		{
 			name:      "trailing slash is a separate url",
@@ -142,7 +146,7 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 				{path: "/missing", status: http.StatusNotFound},
 				{path: "/missing/", status: http.StatusNotFound},
 			},
-			wantRequests: map[string]int32{"/missing": 1, "/missing/": 1},
+			wantRequests: map[string]int32{"/missing": 2, "/missing/": 2},
 		},
 		{
 			name:         "retries report the final status",
@@ -152,7 +156,40 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 			retries:      2,
 			wantPages:    1,
 			wantBroken:   []brokenExpectation{{path: "/flaky", status: http.StatusServiceUnavailable}},
-			wantRequests: map[string]int32{"/flaky": 3},
+			wantRequests: map[string]int32{"/flaky": 6},
+		},
+		{
+			name:         "head forbidden is confirmed with get",
+			root:         `<a href="/child">child</a>`,
+			routes:       map[string]linkRoute{"/child": {headStatus: http.StatusForbidden, body: "<title>Child</title>"}},
+			depth:        2,
+			wantPages:    2,
+			wantRequests: map[string]int32{"/child": 3},
+		},
+		{
+			name:         "head not found is confirmed with get",
+			root:         `<a href="/child">child</a>`,
+			routes:       map[string]linkRoute{"/child": {headStatus: http.StatusNotFound, body: "<title>Child</title>"}},
+			depth:        2,
+			wantPages:    2,
+			wantRequests: map[string]int32{"/child": 3},
+		},
+		{
+			name:         "confirmed get error is reported",
+			root:         `<a href="/child">child</a>`,
+			routes:       map[string]linkRoute{"/child": {headStatus: http.StatusForbidden, status: http.StatusForbidden}},
+			depth:        1,
+			wantPages:    1,
+			wantBroken:   []brokenExpectation{{path: "/child", status: http.StatusForbidden}},
+			wantRequests: map[string]int32{"/child": 2},
+		},
+		{
+			name:         "successful head is not confirmed with get",
+			root:         `<a href="/child">child</a>`,
+			routes:       map[string]linkRoute{"/child": {body: "<title>Child</title>"}},
+			depth:        2,
+			wantPages:    2,
+			wantRequests: map[string]int32{"/child": 2},
 		},
 	}
 
@@ -179,6 +216,44 @@ func TestAnalyzeBrokenLinks(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAnalyzeHeadErrorIsConfirmedWithGet(t *testing.T) {
+	var (
+		mu           sync.Mutex
+		childMethods []string
+	)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			_, _ = fmt.Fprint(w, `<a href="/child">child</a>`)
+		case "/child":
+			mu.Lock()
+			childMethods = append(childMethods, r.Method)
+			mu.Unlock()
+
+			if r.Method == http.MethodHead {
+				w.WriteHeader(http.StatusForbidden)
+
+				return
+			}
+			_, _ = fmt.Fprint(w, "<title>Child</title>")
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	server := newTestServer(t, handler)
+
+	report := analyzeReport(t, crawler.Options{
+		URL:        server.URL,
+		Depth:      2,
+		HTTPClient: server.Client(),
+	})
+	require.Len(t, report.Pages, 2)
+	require.Empty(t, report.Pages[0].BrokenLinks)
+	require.Equal(t, "ok", report.Pages[1].Status)
+	require.Equal(t, []string{http.MethodHead, http.MethodGet, http.MethodGet}, childMethods)
 }
 
 func TestAnalyzeStartURLFragmentDoesNotDuplicatePage(t *testing.T) {
@@ -232,7 +307,7 @@ func TestAnalyzeExternalBrokenLinkIsCheckedButNotCrawled(t *testing.T) {
 	require.Equal(t, []crawler.BrokenLink{
 		brokenLink(externalServer.URL+"/outside", http.StatusNotFound),
 	}, report.Pages[0].BrokenLinks)
-	require.Equal(t, int32(1), externalRequests.Load())
+	require.Equal(t, int32(2), externalRequests.Load())
 	require.NotContains(t, reportURLs(report), externalServer.URL+"/outside")
 }
 
