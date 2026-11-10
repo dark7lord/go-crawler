@@ -17,22 +17,6 @@ const (
 	statusError = "error"
 )
 
-// SEOResult holds basic SEO data of a page.
-type SEOResult = seo.Result
-
-// Page is a single crawled page in the report.
-type Page struct {
-	URL          string       `json:"url"`
-	Depth        uint         `json:"depth"`
-	HTTPStatus   int          `json:"http_status"`
-	Status       string       `json:"status"`
-	Error        string       `json:"error,omitempty"`
-	SEO          SEOResult    `json:"seo"`
-	BrokenLinks  []BrokenLink `json:"broken_links"`
-	Assets       []Asset      `json:"assets"`
-	DiscoveredAt time.Time    `json:"discovered_at"`
-}
-
 func newPage(u *url.URL, depth uint) Page {
 	return Page{
 		URL:          u.String(),
