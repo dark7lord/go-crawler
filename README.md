@@ -1,10 +1,13 @@
+# Go Crawler
+
 ### Hexlet tests and linter status:
 [![Actions Status](https://github.com/dark7lord/go-crawler/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/dark7lord/go-crawler/actions)
 [![ci](https://github.com/dark7lord/go-crawler/actions/workflows/ci.yml/badge.svg)](https://github.com/dark7lord/go-crawler/actions/workflows/ci.yml)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=dark7lord_go-crawler&metric=coverage)](https://sonarcloud.io/summary/new_code?id=dark7lord_go-crawler)
 <!-- [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dark7lord_go-crawler&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dark7lord_go-crawler) -->
 
-A console parser that crawls the website, checks the validity of links and static files, collects SEO information, and generates a JSON report for each page.
+A small command-line crawler written in Go. It walks through a website, checks links and
+static files, collects basic SEO data and writes a JSON report.
 
 ## Usage
 
