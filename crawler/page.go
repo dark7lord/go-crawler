@@ -2,6 +2,7 @@ package crawler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,6 +16,11 @@ import (
 const (
 	statusOK    = "ok"
 	statusError = "error"
+)
+
+var (
+	errOutOfScope          = errors.New("redirected out of scope")
+	errRedirectNotFollowed = errors.New("redirect not followed")
 )
 
 func newPage(u *url.URL, depth uint) Page {
@@ -41,6 +47,34 @@ func (p *Page) setHTTPStatus(code int) {
 	p.Status = status
 }
 
+// unfollowedRedirectError reports a redirect that the HTTP client did not follow.
+func unfollowedRedirectError(resp *http.Response) error {
+	if !isRedirectStatus(resp.StatusCode) {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"%w: HTTP %d %s",
+		errRedirectNotFollowed,
+		resp.StatusCode,
+		http.StatusText(resp.StatusCode),
+	)
+}
+
+// isRedirectStatus matches the statuses net/http follows automatically.
+func isRedirectStatus(code int) bool {
+	switch code {
+	case http.StatusMovedPermanently,
+		http.StatusFound,
+		http.StatusSeeOther,
+		http.StatusTemporaryRedirect,
+		http.StatusPermanentRedirect:
+		return true
+	}
+
+	return false
+}
+
 func (crw *crawler) parsePage(ctx context.Context, page *Page, resp *http.Response) []foundURL {
 	doc, err := htmlparse.Parse(resp.Body)
 	if err != nil {
@@ -63,6 +97,26 @@ func (crw *crawler) parsePage(ctx context.Context, page *Page, resp *http.Respon
 	}
 
 	return liveLinks
+}
+
+// validatePageResponse reports whether resp can be parsed as a page.
+func (crw *crawler) validatePageResponse(
+	page *Page,
+	resp *http.Response,
+) bool {
+	if resp.Request.URL.Host != crw.host {
+		page.setError(fmt.Errorf("%w: %s", errOutOfScope, resp.Request.URL))
+
+		return false
+	}
+
+	if err := unfollowedRedirectError(resp); err != nil {
+		page.setError(err)
+
+		return false
+	}
+
+	return page.Status != statusError
 }
 
 func (crw *crawler) fetchPage(
@@ -93,7 +147,7 @@ func (crw *crawler) fetchPage(
 
 	page.setHTTPStatus(resp.StatusCode)
 
-	if page.Status == statusError {
+	if !crw.validatePageResponse(&page, resp) {
 		return page, liveLinks, true
 	}
 

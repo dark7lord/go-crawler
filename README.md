@@ -106,9 +106,13 @@ transport errors have a zero `status_code` and the transport error message.
 ```
 
 `status` is `ok` for successful pages and `error` when a page request fails or
-returns an HTTP status of 400 or greater. SEO flags indicate whether a title,
-description, or H1 element exists; the title and description fields contain
-their extracted text.
+returns an HTTP status of 400 or greater. A page is also reported as `error`
+when a redirect response is not followed (for example, a `3xx` without
+`Location` or a custom `CheckRedirect` policy) and when redirects take it
+outside the crawled host. Such responses are not parsed: SEO data, links, and
+assets are not collected, and the error message identifies the final URL when
+there was one. SEO flags indicate whether a title, description, or H1 element
+exists; the title and description fields contain their extracted text.
 
 The library's `IndentJSON` option and CLI's `--indent-json` flag control
 indentation only. They do not change the report values or key order. The CLI
